@@ -11,6 +11,10 @@ node_modules
 dist
 dist-ssr
 *.local
+recovered-*.json
+recovered-localstorage/
+server-data/project.json
+server-data/*.backup*.json
 
 # Editor directories and files
 .vscode/*

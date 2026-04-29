@@ -136,3 +136,11 @@ npm run stable:lan
 2. Создайте secret `OPENAI_API_KEY`.
 3. (Опционально) создайте variable `OPENAI_MODEL` (по умолчанию `gpt-4.1-mini`).
 4. Убедитесь, что у workflow есть permission `pull-requests: write` (уже задано в файле).
+
+## CI в GitHub Actions
+
+В проект добавлен workflow `.github/workflows/ci.yml`, который запускается на `push` и `pull_request` в ветку `main` и выполняет:
+
+- `npm ci`
+- `npm run lint`
+- `npm run build`

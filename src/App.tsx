@@ -638,11 +638,15 @@ function App() {
     if (activeTab !== 'config') return
     const hasSliding = segments.some((segment) => segment === 'SL')
     if (!hasSliding) return
-    setSegments((current) => current.map(() => 'FIX'))
+    // Defer state update to avoid synchronous setState in effect body.
+    const timerId = window.setTimeout(() => {
+      setSegments((current) => current.map(() => 'FIX'))
+    }, 0)
     showWarning(
       'Серия 65 не поддерживает откатные створки. Все сегменты автоматически переведены в FIX.',
       'series65-auto-fix',
     )
+    return () => window.clearTimeout(timerId)
   }, [frameSeries, segments, activeTab])
 
   const activeSlBottomBindingId =
