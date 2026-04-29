@@ -121,22 +121,6 @@ npm run stable:lan
 - Экспорт спецификации в Excel и PDF.
 - Работа в локальной сети с общей серверной базой.
 
-## AI review для Pull Request
-
-В проект добавлен GitHub Action `.github/workflows/ai-pr-review.yml`, который:
-
-- запускается на событиях PR (`opened/synchronize/reopened/ready_for_review`),
-- берет diff между веткой PR и base-веткой,
-- отправляет diff в LLM,
-- публикует (или обновляет) комментарий `AI Review` в PR.
-
-### Настройка
-
-1. В GitHub репозитории откройте `Settings -> Secrets and variables -> Actions`.
-2. Создайте secret `OPENAI_API_KEY`.
-3. (Опционально) создайте variable `OPENAI_MODEL` (по умолчанию `gpt-4.1-mini`).
-4. Убедитесь, что у workflow есть permission `pull-requests: write` (уже задано в файле).
-
 ## CI в GitHub Actions
 
 В проект добавлен workflow `.github/workflows/ci.yml`, который запускается на `push` и `pull_request` в ветку `main` и выполняет:
@@ -144,18 +128,3 @@ npm run stable:lan
 - `npm ci`
 - `npm run lint`
 - `npm run build`
-
-## AI release notes
-
-В проект добавлен workflow `.github/workflows/ai-release-notes.yml`, который запускается при публикации релиза (`release: published`):
-
-- определяет диапазон коммитов между текущим и предыдущим тегом,
-- формирует digest изменений,
-- отправляет digest в LLM,
-- обновляет body релиза в GitHub с готовыми release notes.
-
-### Настройка
-
-1. В GitHub репозитории откройте `Settings -> Secrets and variables -> Actions`.
-2. Убедитесь, что secret `OPENAI_API_KEY` задан (можно использовать тот же, что для AI PR review).
-3. (Опционально) задайте variable `OPENAI_MODEL` (по умолчанию `gpt-4.1-mini`).
