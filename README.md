@@ -144,3 +144,18 @@ npm run stable:lan
 - `npm ci`
 - `npm run lint`
 - `npm run build`
+
+## AI release notes
+
+В проект добавлен workflow `.github/workflows/ai-release-notes.yml`, который запускается при публикации релиза (`release: published`):
+
+- определяет диапазон коммитов между текущим и предыдущим тегом,
+- формирует digest изменений,
+- отправляет digest в LLM,
+- обновляет body релиза в GitHub с готовыми release notes.
+
+### Настройка
+
+1. В GitHub репозитории откройте `Settings -> Secrets and variables -> Actions`.
+2. Убедитесь, что secret `OPENAI_API_KEY` задан (можно использовать тот же, что для AI PR review).
+3. (Опционально) задайте variable `OPENAI_MODEL` (по умолчанию `gpt-4.1-mini`).

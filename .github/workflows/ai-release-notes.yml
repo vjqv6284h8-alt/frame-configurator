@@ -1,0 +1,55 @@
+name: AI Release Notes
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  generate-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build commit digest
+        id: digest
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git fetch --tags --force
+          PREV_TAG="$(git tag --sort=-creatordate | awk -v tag="$TAG" '$0 != tag { print; exit }')"
+          echo "previous_tag=${PREV_TAG}" >> "$GITHUB_OUTPUT"
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${TAG}"
+          else
+            RANGE="${TAG}"
+          fi
+          {
+            echo "Range: ${RANGE}"
+            echo
+            echo "Commits:"
+            git log --no-merges --pretty=format:'- %h %s (%an)' "$RANGE"
+            echo
+            echo
+            echo "Diff stat:"
+            git diff --shortstat "$RANGE" || true
+          } > release-context.txt
+
+      - name: Generate and publish AI release notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
+          PREVIOUS_TAG: ${{ steps.digest.outputs.previous_tag }}
+        run: |
+          node scripts/ai-release-notes.mjs < release-context.txt
