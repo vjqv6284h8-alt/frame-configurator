@@ -121,18 +121,10 @@ npm run stable:lan
 - Экспорт спецификации в Excel и PDF.
 - Работа в локальной сети с общей серверной базой.
 
-## AI review для Pull Request
+## CI в GitHub Actions
 
-В проект добавлен GitHub Action `.github/workflows/ai-pr-review.yml`, который:
+В проект добавлен workflow `.github/workflows/ci.yml`, который запускается на `push` и `pull_request` в ветку `main` и выполняет:
 
-- запускается на событиях PR (`opened/synchronize/reopened/ready_for_review`),
-- берет diff между веткой PR и base-веткой,
-- отправляет diff в LLM,
-- публикует (или обновляет) комментарий `AI Review` в PR.
-
-### Настройка
-
-1. В GitHub репозитории откройте `Settings -> Secrets and variables -> Actions`.
-2. Создайте secret `OPENAI_API_KEY`.
-3. (Опционально) создайте variable `OPENAI_MODEL` (по умолчанию `gpt-4.1-mini`).
-4. Убедитесь, что у workflow есть permission `pull-requests: write` (уже задано в файле).
+- `npm ci`
+- `npm run lint`
+- `npm run build`
