@@ -1,0 +1,148 @@
+{
+  "projectNumber": "",
+  "preparedBy": "",
+  "widthMm": 6000,
+  "heightMm": 3000,
+  "frameSeries": "65",
+  "leafBottomMode": "standard",
+  "segmentsCount": 3,
+  "segments": [
+    "FIX",
+    "FIX",
+    "FIX"
+  ],
+  "openingDirections": [
+    "right",
+    "right",
+    "right"
+  ],
+  "slActiveVerticalGapMm": 120,
+  "wastePercent": 7,
+  "profiles": [
+    {
+      "id": "frame-outer-65",
+      "article": "FO-65",
+      "name": "Наружняя чаша 65",
+      "defaultLength": 6000
+    },
+    {
+      "id": "frame-thermal-65",
+      "article": "TB-65",
+      "name": "Термомост 65",
+      "defaultLength": 6000
+    },
+    {
+      "id": "frame-central-65",
+      "article": "FC-65",
+      "name": "Центральный профиль 65",
+      "defaultLength": 6000
+    },
+    {
+      "id": "frame-outer-80",
+      "article": "FO-80",
+      "name": "Наружняя чаша 80",
+      "defaultLength": 6000
+    },
+    {
+      "id": "frame-central-80",
+      "article": "FC-80",
+      "name": "Центральный профиль 80",
+      "defaultLength": 6000
+    },
+    {
+      "id": "frame-main",
+      "article": "RM-70",
+      "name": "Рама 70",
+      "defaultLength": 6000
+    },
+    {
+      "id": "fix-fix",
+      "article": "FF-25",
+      "name": "Импост FF-25",
+      "defaultLength": 6000
+    },
+    {
+      "id": "fix-sl",
+      "article": "FS-40",
+      "name": "Импост FS-40",
+      "defaultLength": 6000
+    },
+    {
+      "id": "sl-perimeter-a",
+      "article": "SLA-01",
+      "name": "SL оклейка A (низ)",
+      "defaultLength": 2800
+    },
+    {
+      "id": "sl-perimeter-b",
+      "article": "SLB-02",
+      "name": "SL оклейка B/C/D",
+      "defaultLength": 2800
+    },
+    {
+      "id": "sl-to-frame",
+      "article": "SLR-18",
+      "name": "SL рабочая сторона к раме",
+      "defaultLength": 6000
+    },
+    {
+      "id": "sl-to-fix",
+      "article": "SLF-19",
+      "name": "SL рабочая сторона к FIX",
+      "defaultLength": 6000
+    },
+    {
+      "id": "sl-to-sl",
+      "article": "SLS-20",
+      "name": "SL рабочая сторона к SL",
+      "defaultLength": 6000
+    },
+    {
+      "id": "sl-to-penal",
+      "article": "SLP-21",
+      "name": "SL рабочая сторона к пеналу",
+      "defaultLength": 6000
+    },
+    {
+      "id": "sl-to-corner",
+      "article": "SLC-22",
+      "name": "SL рабочая сторона к углу",
+      "defaultLength": 6000
+    }
+  ],
+  "readyAssemblies": [],
+  "nodeTemplates": [],
+  "systemNodeTemplateBinding": {
+    "frameSingleTrackAssembly": "",
+    "frameDoubleTrackAssembly": "",
+    "frameTripleTrackAssembly": "",
+    "frameQuadrupleTrackAssembly": "",
+    "fixFix": "",
+    "fixSl": "",
+    "slLeafBottomA": "",
+    "slLeafBottomAFreeway": "",
+    "slLeafPerimeterBcd": "",
+    "slSideToFrame": "",
+    "slSideToFix": "",
+    "slSideToSl": "",
+    "slSideToPenal": "",
+    "slSideToCorner": ""
+  },
+  "nodeProfileBinding": {
+    "frameOuter65": "frame-outer-65",
+    "frameOuter80": "frame-outer-80",
+    "frameThermal": "frame-thermal-65",
+    "frameCentral65": "frame-central-65",
+    "frameCentral80": "frame-central-80",
+    "fixFix": "fix-fix",
+    "fixSl": "fix-sl",
+    "slLeafBottomA": "sl-perimeter-a",
+    "slLeafPerimeterBcd": "sl-perimeter-b",
+    "slSideToFrame": "sl-to-frame",
+    "slSideToFix": "sl-to-fix",
+    "slSideToSl": "sl-to-sl",
+    "slSideToPenal": "sl-to-penal",
+    "slSideToCorner": "sl-to-corner"
+  },
+  "customNodes": []
+}
