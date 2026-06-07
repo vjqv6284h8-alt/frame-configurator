@@ -14,6 +14,7 @@ dist-ssr
 recovered-*.json
 recovered-localstorage/
 server-data/project.json
+server-data/history/
 server-data/*.backup*.json
 
 # Editor directories and files
