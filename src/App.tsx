@@ -219,6 +219,40 @@ const getInitialProjectData = (): ProjectData | null => {
   return null
 }
 
+/** Достаёт ProjectData из сырого JSON или серверной обёртки { updatedAt, data }. */
+const unwrapProjectData = (payload: unknown): ProjectData | null => {
+  if (!payload || typeof payload !== 'object') return null
+  const obj = payload as Record<string, unknown>
+
+  if ('data' in obj) {
+    const nested = obj.data
+    if (!nested || typeof nested !== 'object') return null
+    return nested as ProjectData
+  }
+
+  // Экспорт/бэкап без обёртки: есть характерные поля проекта.
+  if ('widthMm' in obj || 'heightMm' in obj || 'segments' in obj || 'profiles' in obj) {
+    return obj as ProjectData
+  }
+
+  return null
+}
+
+const normalizeSegments = (raw: unknown, countHint?: unknown): SegmentType[] => {
+  const count =
+    typeof countHint === 'number' && Number.isFinite(countHint)
+      ? Math.max(1, Math.floor(countHint))
+      : Array.isArray(raw) && raw.length > 0
+        ? raw.length
+        : 1
+
+  const source = Array.isArray(raw) ? raw : []
+  return Array.from({ length: count }, (_, index) => {
+    const value = source[index]
+    return value === 'SL' || value === 'FIX' ? value : 'FIX'
+  })
+}
+
 const getInitialActiveTab = (): ActiveTab => {
   if (typeof window !== 'undefined') {
     const hash = window.location.hash.replace('#', '')
@@ -1845,14 +1879,15 @@ function App() {
   })
 
   const applyProjectData = (parsed: ProjectData) => {
+    const nextSegments = normalizeSegments(parsed.segments, parsed.segmentsCount)
     setProjectNumber(parsed.projectNumber ?? '')
     setPreparedBy(parsed.preparedBy ?? '')
     setWidthMm(parsed.widthMm)
     setHeightMm(parsed.heightMm)
     setFrameSeries(parsed.frameSeries ?? '65')
     setLeafBottomMode(parsed.leafBottomMode ?? 'standard')
-    setSegmentsCount(Math.max(1, parsed.segmentsCount))
-    setSegments(parsed.segments)
+    setSegmentsCount(nextSegments.length)
+    setSegments(nextSegments)
     setOpeningDirections(parsed.openingDirections ?? ['right', 'right', 'right'])
     setSegmentHeightOffset65Mm(Math.max(0, parsed.segmentHeightOffset65Mm ?? 52))
     setSegmentHeightOffset80Mm(Math.max(0, parsed.segmentHeightOffset80Mm ?? 67))
@@ -1891,17 +1926,20 @@ function App() {
       try {
         const response = await fetch('/api/project')
         if (!response.ok) throw new Error('API error')
-        const payload = (await response.json()) as { data?: ProjectData | null }
-        if (payload.data) {
-          applyProjectData(payload.data)
+        const payload: unknown = await response.json()
+        const project = unwrapProjectData(payload)
+        if (project) {
+          applyProjectData(project)
           setServerSyncStatus('База загружена с сервера')
         } else {
           setServerSyncStatus('На сервере пока нет данных, используется шаблон')
         }
-      } catch {
-        setServerSyncStatus('Ошибка загрузки с сервера, используется шаблон')
-      } finally {
+        // Autosave только после успешного ответа API — иначе шаблон перезапишет базу.
         setServerLoadReady(true)
+      } catch {
+        setServerSyncStatus(
+          'Ошибка загрузки с сервера, используется шаблон (автосохранение отключено)',
+        )
       }
     }
 
@@ -2091,8 +2129,10 @@ function App() {
     const reader = new FileReader()
     reader.onload = () => {
       try {
-        const parsed = JSON.parse(String(reader.result)) as ProjectData
-        applyProjectData(parsed)
+        const parsed: unknown = JSON.parse(String(reader.result))
+        const project = unwrapProjectData(parsed)
+        if (!project) throw new Error('Invalid project JSON')
+        applyProjectData(project)
       } catch {
         alert('Не удалось загрузить JSON проекта')
       }
