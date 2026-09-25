@@ -54,7 +54,20 @@ type ActiveTab =
   | 'ready-hardware'
   | 'assemblies'
   | 'nodes'
+  | 'notes'
   | 'settings'
+
+type CashAdvanceEntryType = 'topup' | 'expense'
+
+type CashAdvanceEntry = {
+  id: string
+  type: CashAdvanceEntryType
+  amount: number
+  /** Для topup — под что взято; для expense — на что потрачено */
+  description: string
+  date: string
+  createdAt: string
+}
 
 type CustomNodeFormula =
   | 'framePerimeter'
@@ -157,6 +170,7 @@ type ProjectData = {
   systemNodeTemplateBinding?: SystemNodeTemplateBinding
   nodeProfileBinding?: NodeProfileBinding
   customNodes?: CustomNode[]
+  cashAdvances?: CashAdvanceEntry[]
 }
 
 const defaultProfiles: Profile[] = [
@@ -229,12 +243,52 @@ const getInitialActiveTab = (): ActiveTab => {
       hash === 'ready-hardware' ||
       hash === 'assemblies' ||
       hash === 'nodes' ||
+      hash === 'notes' ||
       hash === 'settings'
     ) {
       return hash
     }
   }
   return 'config'
+}
+
+const todayLocalDate = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const formatMoney = (value: number) =>
+  `${value.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ₽`
+
+const normalizeCashAdvances = (items: unknown): CashAdvanceEntry[] => {
+  if (!Array.isArray(items)) return []
+  return items
+    .map((raw, index) => {
+      const item = raw as Partial<CashAdvanceEntry>
+      const type: CashAdvanceEntryType = item.type === 'expense' ? 'expense' : 'topup'
+      const amount = Math.max(0, Number(item.amount) || 0)
+      const description = String(item.description ?? '').trim()
+      const date =
+        typeof item.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.date)
+          ? item.date
+          : todayLocalDate()
+      const createdAt =
+        typeof item.createdAt === 'string' && item.createdAt
+          ? item.createdAt
+          : new Date().toISOString()
+      return {
+        id: item.id || `cash-${Date.now()}-${index}`,
+        type,
+        amount,
+        description,
+        date,
+        createdAt,
+      }
+    })
+    .filter((item) => item.amount > 0 && item.description)
 }
 
 const normalizeHardware = (items: unknown): HardwareItem[] => {
@@ -389,6 +443,16 @@ function App() {
   const [newReadyHardwareArticle, setNewReadyHardwareArticle] = useState('')
   const [newReadyHardwareName, setNewReadyHardwareName] = useState('')
   const [readyHardwareSearch, setReadyHardwareSearch] = useState('')
+  const [cashAdvances, setCashAdvances] = useState<CashAdvanceEntry[]>(
+    normalizeCashAdvances(initialProject?.cashAdvances),
+  )
+  const [cashTopupAmount, setCashTopupAmount] = useState('')
+  const [cashTopupDescription, setCashTopupDescription] = useState('')
+  const [cashTopupDate, setCashTopupDate] = useState(todayLocalDate)
+  const [cashExpenseAmount, setCashExpenseAmount] = useState('')
+  const [cashExpenseDescription, setCashExpenseDescription] = useState('')
+  const [cashExpenseDate, setCashExpenseDate] = useState(todayLocalDate)
+  const [cashLedgerSearch, setCashLedgerSearch] = useState('')
   const [nodeProfileBinding, setNodeProfileBinding] = useState<NodeProfileBinding>({
     ...defaultNodeProfileBinding,
     ...(initialProject?.nodeProfileBinding ?? {}),
@@ -527,6 +591,58 @@ function App() {
       (h) => h.article.toLowerCase().includes(q) || h.name.toLowerCase().includes(q),
     )
   }, [readyHardware, readyHardwareSearch])
+
+  const cashLedgerSummary = useMemo(() => {
+    let totalTopup = 0
+    let totalExpense = 0
+    const topupByPurpose = new Map<string, number>()
+    const expenseByPurpose = new Map<string, number>()
+
+    cashAdvances.forEach((entry) => {
+      if (entry.type === 'topup') {
+        totalTopup += entry.amount
+        const key = entry.description.trim() || 'Без назначения'
+        topupByPurpose.set(key, (topupByPurpose.get(key) ?? 0) + entry.amount)
+      } else {
+        totalExpense += entry.amount
+        const key = entry.description.trim() || 'Без описания'
+        expenseByPurpose.set(key, (expenseByPurpose.get(key) ?? 0) + entry.amount)
+      }
+    })
+
+    const sortEntries = (map: Map<string, number>) =>
+      [...map.entries()]
+        .map(([description, amount]) => ({ description, amount }))
+        .sort((a, b) => b.amount - a.amount || a.description.localeCompare(b.description, 'ru'))
+
+    return {
+      totalTopup,
+      totalExpense,
+      balance: totalTopup - totalExpense,
+      topups: sortEntries(topupByPurpose),
+      expenses: sortEntries(expenseByPurpose),
+    }
+  }, [cashAdvances])
+
+  const filteredCashAdvances = useMemo(() => {
+    const q = cashLedgerSearch.trim().toLowerCase()
+    const list = q
+      ? cashAdvances.filter((entry) => {
+          const typeLabel = entry.type === 'topup' ? 'пополнение' : 'трата'
+          return (
+            entry.description.toLowerCase().includes(q) ||
+            entry.date.includes(q) ||
+            typeLabel.includes(q) ||
+            String(entry.amount).includes(q)
+          )
+        })
+      : cashAdvances
+
+    return [...list].sort((a, b) => {
+      if (a.date !== b.date) return b.date.localeCompare(a.date)
+      return b.createdAt.localeCompare(a.createdAt)
+    })
+  }, [cashAdvances, cashLedgerSearch])
 
   const getProfilesByQuery = (query: string) => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -1842,6 +1958,7 @@ function App() {
     systemNodeTemplateBinding,
     nodeProfileBinding,
     customNodes,
+    cashAdvances,
   })
 
   const applyProjectData = (parsed: ProjectData) => {
@@ -1868,6 +1985,7 @@ function App() {
     })
     setNodeProfileBinding({ ...defaultNodeProfileBinding, ...(parsed.nodeProfileBinding ?? {}) })
     setCustomNodes(normalizeCustomNodes(parsed.customNodes))
+    setCashAdvances(normalizeCashAdvances(parsed.cashAdvances))
   }
 
   const saveProjectToServer = async () => {
@@ -1944,6 +2062,7 @@ function App() {
     preparedBy,
     hardware,
     readyHardware,
+    cashAdvances,
     activeTab,
     newProfileArticle,
     newProfileName,
@@ -2241,6 +2360,85 @@ function App() {
       }))
       return next
     })
+  }
+
+  const addCashAdvanceEntry = (type: CashAdvanceEntryType) => {
+    const amountRaw = type === 'topup' ? cashTopupAmount : cashExpenseAmount
+    const descriptionRaw = type === 'topup' ? cashTopupDescription : cashExpenseDescription
+    const dateRaw = type === 'topup' ? cashTopupDate : cashExpenseDate
+    const amount = Math.round((Number(String(amountRaw).replace(',', '.')) || 0) * 100) / 100
+    const description = descriptionRaw.trim()
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : todayLocalDate()
+
+    if (amount <= 0) {
+      showWarning('Укажите сумму больше нуля.', 'cash-amount-required')
+      return
+    }
+    if (!description) {
+      showWarning(
+        type === 'topup' ? 'Укажите, под что взяты наличные.' : 'Укажите, на что потрачены наличные.',
+        'cash-description-required',
+      )
+      return
+    }
+    if (type === 'expense' && amount > cashLedgerSummary.balance + 1e-9) {
+      showWarning(
+        `Нельзя списать ${formatMoney(amount)}: на руках сейчас ${formatMoney(cashLedgerSummary.balance)}.`,
+        'cash-insufficient-balance',
+      )
+      return
+    }
+
+    setCashAdvances((current) => [
+      ...current,
+      {
+        id: `cash-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        type,
+        amount,
+        description,
+        date,
+        createdAt: new Date().toISOString(),
+      },
+    ])
+
+    if (type === 'topup') {
+      setCashTopupAmount('')
+      setCashTopupDescription('')
+      setCashTopupDate(todayLocalDate())
+    } else {
+      setCashExpenseAmount('')
+      setCashExpenseDescription('')
+      setCashExpenseDate(todayLocalDate())
+    }
+  }
+
+  const updateCashAdvanceEntry = (id: string, patch: Partial<CashAdvanceEntry>) => {
+    setCashAdvances((current) =>
+      current.map((entry) => {
+        if (entry.id !== id) return entry
+        const nextType: CashAdvanceEntryType =
+          patch.type === 'expense' || patch.type === 'topup' ? patch.type : entry.type
+        const nextAmount =
+          patch.amount === undefined
+            ? entry.amount
+            : Math.max(0, Math.round((Number(patch.amount) || 0) * 100) / 100)
+        const nextDescription =
+          patch.description === undefined ? entry.description : String(patch.description)
+        const nextDate =
+          patch.date && /^\d{4}-\d{2}-\d{2}$/.test(patch.date) ? patch.date : entry.date
+        return {
+          ...entry,
+          type: nextType,
+          amount: nextAmount,
+          description: nextDescription,
+          date: nextDate,
+        }
+      }),
+    )
+  }
+
+  const deleteCashAdvanceEntry = (id: string) => {
+    setCashAdvances((current) => current.filter((entry) => entry.id !== id))
   }
 
   const addHardware = () => {
@@ -2932,6 +3130,14 @@ function App() {
     setSystemNodeTemplateBinding(defaultSystemNodeTemplateBinding)
     setNodeProfileBinding(defaultNodeProfileBinding)
     setCustomNodes([])
+    setCashAdvances([])
+    setCashTopupAmount('')
+    setCashTopupDescription('')
+    setCashTopupDate(todayLocalDate())
+    setCashExpenseAmount('')
+    setCashExpenseDescription('')
+    setCashExpenseDate(todayLocalDate())
+    setCashLedgerSearch('')
     setNewProfileName('')
     setNewProfileArticle('')
     setNewProfileLength(3000)
@@ -3033,10 +3239,17 @@ function App() {
         </button>
         <button
           type="button"
+          className={activeTab === 'notes' ? 'active' : ''}
+          onClick={() => setActiveTab('notes')}
+        >
+          7. Заметки
+        </button>
+        <button
+          type="button"
           className={activeTab === 'settings' ? 'active' : ''}
           onClick={() => setActiveTab('settings')}
         >
-          7. Настройки
+          8. Настройки
         </button>
       </div>
       {uiWarning ? <p className="warning-text">{uiWarning}</p> : null}
@@ -4467,6 +4680,248 @@ function App() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+      ) : activeTab === 'notes' ? (
+        <section className="content">
+          <h3>Заметки: наличные авансом</h3>
+          <p className="hint">
+            Учёт выданных наличных: пополнение (сколько взяли и под что) и траты (на что купили). Баланс «на
+            руках» считается автоматически. Данные сохраняются вместе с проектом на сервер.
+          </p>
+
+          <div className="cash-summary-grid">
+            <div className="cash-summary-card cash-summary-balance">
+              <span className="cash-summary-label">На руках сейчас</span>
+              <strong className={cashLedgerSummary.balance < 0 ? 'cash-negative' : ''}>
+                {formatMoney(cashLedgerSummary.balance)}
+              </strong>
+            </div>
+            <div className="cash-summary-card">
+              <span className="cash-summary-label">Всего взято</span>
+              <strong>{formatMoney(cashLedgerSummary.totalTopup)}</strong>
+            </div>
+            <div className="cash-summary-card">
+              <span className="cash-summary-label">Всего потрачено</span>
+              <strong>{formatMoney(cashLedgerSummary.totalExpense)}</strong>
+            </div>
+          </div>
+
+          <div className="cash-forms-grid">
+            <div className="cash-form-block">
+              <h4>Пополнение</h4>
+              <div className="grid">
+                <label>
+                  Сумма, ₽
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={cashTopupAmount}
+                    onChange={(e) => setCashTopupAmount(e.target.value)}
+                    placeholder="Например: 5000"
+                  />
+                </label>
+                <label>
+                  Под что взято
+                  <input
+                    type="text"
+                    value={cashTopupDescription}
+                    onChange={(e) => setCashTopupDescription(e.target.value)}
+                    placeholder="Например: расходники на объект"
+                  />
+                </label>
+                <label>
+                  Дата
+                  <input
+                    type="date"
+                    value={cashTopupDate}
+                    onChange={(e) => setCashTopupDate(e.target.value)}
+                  />
+                </label>
+              </div>
+              <button type="button" className="add-button" onClick={() => addCashAdvanceEntry('topup')}>
+                Добавить пополнение
+              </button>
+            </div>
+
+            <div className="cash-form-block">
+              <h4>Трата</h4>
+              <div className="grid">
+                <label>
+                  Сумма, ₽
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={cashExpenseAmount}
+                    onChange={(e) => setCashExpenseAmount(e.target.value)}
+                    placeholder="Например: 1200"
+                  />
+                </label>
+                <label>
+                  На что потрачено
+                  <input
+                    type="text"
+                    value={cashExpenseDescription}
+                    onChange={(e) => setCashExpenseDescription(e.target.value)}
+                    placeholder="Например: саморезы и пена"
+                  />
+                </label>
+                <label>
+                  Дата
+                  <input
+                    type="date"
+                    value={cashExpenseDate}
+                    onChange={(e) => setCashExpenseDate(e.target.value)}
+                  />
+                </label>
+              </div>
+              <button type="button" className="add-button" onClick={() => addCashAdvanceEntry('expense')}>
+                Добавить трату
+              </button>
+            </div>
+          </div>
+
+          <div className="cash-breakdown-grid">
+            <div>
+              <h4>Под что взято</h4>
+              {cashLedgerSummary.topups.length === 0 ? (
+                <p className="hint">Пока нет пополнений.</p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Назначение</th>
+                      <th>Сумма</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cashLedgerSummary.topups.map((row) => (
+                      <tr key={`topup-${row.description}`}>
+                        <td>{row.description}</td>
+                        <td>{formatMoney(row.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div>
+              <h4>На что потрачено</h4>
+              {cashLedgerSummary.expenses.length === 0 ? (
+                <p className="hint">Пока нет трат.</p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Статья расхода</th>
+                      <th>Сумма</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cashLedgerSummary.expenses.map((row) => (
+                      <tr key={`expense-${row.description}`}>
+                        <td>{row.description}</td>
+                        <td>{formatMoney(row.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          <div className="spec">
+            <h4>История операций</h4>
+            <div className="grid">
+              <label>
+                Поиск по описанию, сумме или дате
+                <input
+                  type="text"
+                  value={cashLedgerSearch}
+                  onChange={(e) => setCashLedgerSearch(e.target.value)}
+                  placeholder="Например: саморезы или 2026-09"
+                />
+              </label>
+            </div>
+            {filteredCashAdvances.length === 0 ? (
+              <p className="hint">Операций пока нет.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Дата</th>
+                    <th>Тип</th>
+                    <th>Сумма</th>
+                    <th>Описание</th>
+                    <th className="col-actions">Действия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCashAdvances.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>
+                        <input
+                          type="date"
+                          value={entry.date}
+                          onChange={(e) => updateCashAdvanceEntry(entry.id, { date: e.target.value })}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          value={entry.type}
+                          onChange={(e) =>
+                            updateCashAdvanceEntry(entry.id, {
+                              type: e.target.value as CashAdvanceEntryType,
+                            })
+                          }
+                        >
+                          <option value="topup">Пополнение</option>
+                          <option value="expense">Трата</option>
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={editableZeroNumber(entry.amount)}
+                          onChange={(e) =>
+                            updateCashAdvanceEntry(entry.id, {
+                              amount: Math.max(0, Number(e.target.value) || 0),
+                            })
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          value={entry.description}
+                          onChange={(e) =>
+                            updateCashAdvanceEntry(entry.id, { description: e.target.value })
+                          }
+                          placeholder={
+                            entry.type === 'topup' ? 'Под что взято' : 'На что потрачено'
+                          }
+                        />
+                      </td>
+                      <td className="col-actions">
+                        <button
+                          type="button"
+                          className="danger-button icon-button"
+                          title="Удалить"
+                          aria-label="Удалить"
+                          onClick={() => deleteCashAdvanceEntry(entry.id)}
+                        >
+                          🗑
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
       ) : (

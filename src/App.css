@@ -460,3 +460,62 @@ td input {
   font-size: 13px;
   font-weight: 600;
 }
+
+.cash-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 12px 0 18px;
+}
+
+.cash-summary-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cash-summary-balance {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.cash-summary-label {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.cash-summary-card strong {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.cash-negative {
+  color: #b91c1c !important;
+}
+
+.cash-forms-grid,
+.cash-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.cash-form-block {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.cash-form-block h4,
+.cash-breakdown-grid h4,
+.spec h4 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
