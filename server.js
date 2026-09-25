@@ -93,6 +93,94 @@ app.put('/api/project', async (req, res) => {
   }
 })
 
+/** Кириллица доминирует — считаем текст русским. */
+const isRussianText = (text) => {
+  const trimmed = text.trim()
+  if (!trimmed) return false
+
+  const cyrillic = (trimmed.match(/[\u0400-\u04FF]/g) ?? []).length
+  const latin = (trimmed.match(/[a-zA-ZÀ-ÿ]/g) ?? []).length
+  const letters = cyrillic + latin
+
+  if (letters === 0) return false
+  return cyrillic / letters >= 0.5
+}
+
+const getTranslationDirection = (text) => {
+  if (isRussianText(text)) {
+    return { sourceLang: 'ru', targetLang: 'en', label: 'Русский → English' }
+  }
+  return { sourceLang: 'auto', targetLang: 'ru', label: '→ Русский' }
+}
+
+const translateWithGoogle = async (text, sourceLang, targetLang) => {
+  const url = new URL('https://translate.googleapis.com/translate_a/single')
+  url.searchParams.set('client', 'gtx')
+  url.searchParams.set('sl', sourceLang)
+  url.searchParams.set('tl', targetLang)
+  url.searchParams.set('dt', 't')
+  url.searchParams.set('q', text)
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Сервис перевода недоступен (${response.status})`)
+  }
+
+  const payload = await response.json()
+  const segments = payload?.[0]
+  if (!Array.isArray(segments)) {
+    throw new Error('Некорректный ответ от сервиса перевода')
+  }
+
+  const translated = segments
+    .map((segment) => (Array.isArray(segment) ? segment[0] : ''))
+    .join('')
+    .trim()
+
+  if (!translated) {
+    throw new Error('Пустой ответ от сервиса перевода')
+  }
+
+  const detectedLang = typeof payload?.[2] === 'string' ? payload[2] : sourceLang
+
+  return { translated, detectedLang }
+}
+
+app.post('/api/translate', async (req, res) => {
+  try {
+    const text = typeof req.body?.text === 'string' ? req.body.text.trim() : ''
+    if (!text) {
+      res.status(400).json({ message: 'Поле text обязательно' })
+      return
+    }
+
+    const direction = getTranslationDirection(text)
+    const { translated, detectedLang } = await translateWithGoogle(
+      text,
+      direction.sourceLang,
+      direction.targetLang,
+    )
+
+    const directionLabel =
+      direction.targetLang === 'en'
+        ? direction.label
+        : `${detectedLang.toUpperCase()} → Русский`
+
+    res.json({
+      original: text,
+      translation: translated,
+      direction: directionLabel,
+      sourceLang: direction.sourceLang === 'auto' ? detectedLang : direction.sourceLang,
+      targetLang: direction.targetLang,
+    })
+  } catch (error) {
+    res.status(500).json({
+      message: 'Не удалось выполнить перевод',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    })
+  }
+})
+
 // Stable mode: serve built frontend without Vite/HMR.
 if (fsSync.existsSync(DIST_PATH)) {
   app.use(express.static(DIST_PATH))
