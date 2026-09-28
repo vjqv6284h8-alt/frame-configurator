@@ -2,16 +2,31 @@ import express from 'express'
 import fs from 'node:fs/promises'
 import fsSync from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const app = express()
 const PORT = Number(process.env.PORT || 8787)
 /** Слушать все интерфейсы — иначе с других машин по LAN-IP не достучаться */
 const HOST = process.env.HOST || '0.0.0.0'
-const DB_PATH = path.resolve(process.cwd(), 'server-data', 'project.json')
-const DB_HISTORY_DIR = path.resolve(process.cwd(), 'server-data', 'history')
-const DIST_PATH = path.resolve(process.cwd(), 'dist')
+const ROOT_DIR = path.dirname(fileURLToPath(import.meta.url))
+const DB_PATH = path.resolve(ROOT_DIR, 'server-data', 'project.json')
+const DB_HISTORY_DIR = path.resolve(ROOT_DIR, 'server-data', 'history')
+const DIST_PATH = path.resolve(ROOT_DIR, 'dist')
 
 app.use(express.json({ limit: '10mb' }))
+
+/** Сериализация записей: параллельные PUT не должны делить один .tmp. */
+let writeChain = Promise.resolve()
+
+const enqueueWrite = (task) => {
+  const run = writeChain.then(task, task)
+  // Цепочку не роняем ошибкой одной записи.
+  writeChain = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
 
 const ensureDbFile = async () => {
   const dir = path.dirname(DB_PATH)
@@ -39,12 +54,14 @@ const writeDb = async (data) => {
   const serialized = JSON.stringify(payload, null, 2)
 
   // 1) snapshot history (чтобы можно было вернуть состояние)
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const stamp = `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}`
   const snapshotPath = path.join(DB_HISTORY_DIR, `project-${stamp}.json`)
   await fs.writeFile(snapshotPath, serialized, 'utf8')
 
-  // 2) atomic write текущей базы
-  const tmpPath = `${DB_PATH}.tmp`
+  // 2) atomic write текущей базы (уникальный tmp на каждую запись)
+  const tmpPath = `${DB_PATH}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`
   await fs.writeFile(tmpPath, serialized, 'utf8')
   await fs.rename(tmpPath, DB_PATH)
 
@@ -83,7 +100,7 @@ app.put('/api/project', async (req, res) => {
       res.status(400).json({ message: 'Тело запроса должно содержать объект проекта' })
       return
     }
-    await writeDb(nextProject)
+    await enqueueWrite(() => writeDb(nextProject))
     res.json({ ok: true, updatedAt: new Date().toISOString() })
   } catch (error) {
     res.status(500).json({
@@ -96,7 +113,12 @@ app.put('/api/project', async (req, res) => {
 // Stable mode: serve built frontend without Vite/HMR.
 if (fsSync.existsSync(DIST_PATH)) {
   app.use(express.static(DIST_PATH))
-  app.use((_req, res) => {
+  app.use((req, res) => {
+    // Не маскировать неизвестные API-пути HTML-кой SPA.
+    if (req.path.startsWith('/api/')) {
+      res.status(404).json({ message: 'API маршрут не найден' })
+      return
+    }
     res.sendFile(path.join(DIST_PATH, 'index.html'))
   })
 } else {
