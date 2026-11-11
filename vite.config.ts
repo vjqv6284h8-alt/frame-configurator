@@ -10,7 +10,8 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8787',
+        // Явный IPv4: в средах с предпочтением IPv6 localhost может дать ECONNREFUSED.
+        target: 'http://127.0.0.1:8787',
         changeOrigin: true,
       },
     },
